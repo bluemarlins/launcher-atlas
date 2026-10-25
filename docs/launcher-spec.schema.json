@@ -1,0 +1,394 @@
+{
+  "$defs": {
+    "Asset": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "source": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "license": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "License",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "path",
+        "sha256",
+        "source",
+        "license"
+      ],
+      "title": "Asset",
+      "type": "object"
+    },
+    "IconMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "component": {
+          "title": "Component",
+          "type": "string"
+        },
+        "assetId": {
+          "title": "Assetid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "component",
+        "assetId"
+      ],
+      "title": "IconMapping",
+      "type": "object"
+    },
+    "InitialItem": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "default": "app",
+          "enum": [
+            "app",
+            "folder"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "component": {
+          "default": "",
+          "title": "Component",
+          "type": "string"
+        },
+        "label": {
+          "default": "",
+          "maxLength": 60,
+          "title": "Label",
+          "type": "string"
+        },
+        "children": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Children",
+          "type": "array"
+        },
+        "page": {
+          "default": 0,
+          "maximum": 8,
+          "minimum": -1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "cell": {
+          "default": 0,
+          "maximum": 63,
+          "minimum": 0,
+          "title": "Cell",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "InitialItem",
+      "type": "object"
+    },
+    "LayoutSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "template": {
+          "const": "header-grid-dock",
+          "default": "header-grid-dock",
+          "title": "Template",
+          "type": "string"
+        },
+        "columns": {
+          "default": 4,
+          "maximum": 6,
+          "minimum": 3,
+          "title": "Columns",
+          "type": "integer"
+        },
+        "rows": {
+          "default": 4,
+          "maximum": 6,
+          "minimum": 2,
+          "title": "Rows",
+          "type": "integer"
+        },
+        "initialPages": {
+          "default": 3,
+          "maximum": 9,
+          "minimum": 1,
+          "title": "Initialpages",
+          "type": "integer"
+        },
+        "dockCapacity": {
+          "default": 4,
+          "maximum": 6,
+          "minimum": 1,
+          "title": "Dockcapacity",
+          "type": "integer"
+        },
+        "components": {
+          "items": {
+            "enum": [
+              "clock",
+              "date",
+              "battery"
+            ],
+            "type": "string"
+          },
+          "title": "Components",
+          "type": "array"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/InitialItem"
+          },
+          "maxItems": 330,
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "title": "LayoutSpec",
+      "type": "object"
+    },
+    "StyleSheet": {
+      "additionalProperties": false,
+      "properties": {
+        "background": {
+          "default": "#F5F0E8",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Background",
+          "type": "string"
+        },
+        "surface": {
+          "default": "#FFFCF5",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Surface",
+          "type": "string"
+        },
+        "foreground": {
+          "default": "#252820",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Foreground",
+          "type": "string"
+        },
+        "accent": {
+          "default": "#53624A",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Accent",
+          "type": "string"
+        },
+        "typography": {
+          "default": "serif",
+          "enum": [
+            "serif",
+            "rounded",
+            "mono"
+          ],
+          "title": "Typography",
+          "type": "string"
+        },
+        "material": {
+          "default": "paper",
+          "enum": [
+            "paper",
+            "clay",
+            "neon"
+          ],
+          "title": "Material",
+          "type": "string"
+        },
+        "iconShape": {
+          "default": "rounded",
+          "enum": [
+            "rounded",
+            "circle",
+            "squircle"
+          ],
+          "title": "Iconshape",
+          "type": "string"
+        },
+        "iconSize": {
+          "default": 52,
+          "maximum": 64,
+          "minimum": 40,
+          "title": "Iconsize",
+          "type": "integer"
+        },
+        "showLabels": {
+          "default": true,
+          "title": "Showlabels",
+          "type": "boolean"
+        },
+        "cornerRadius": {
+          "default": 20,
+          "maximum": 40,
+          "minimum": 0,
+          "title": "Cornerradius",
+          "type": "integer"
+        },
+        "spacing": {
+          "default": 8,
+          "maximum": 24,
+          "minimum": 0,
+          "title": "Spacing",
+          "type": "integer"
+        },
+        "shadow": {
+          "default": 2,
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Shadow",
+          "type": "integer"
+        },
+        "pageTransition": {
+          "default": "slide",
+          "enum": [
+            "slide",
+            "fade",
+            "depth"
+          ],
+          "title": "Pagetransition",
+          "type": "string"
+        },
+        "reducedMotion": {
+          "default": "system",
+          "enum": [
+            "system",
+            "always"
+          ],
+          "title": "Reducedmotion",
+          "type": "string"
+        },
+        "wallpaper": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wallpaper"
+        },
+        "wallpaperCrop": {
+          "default": "fill",
+          "enum": [
+            "fill",
+            "fit"
+          ],
+          "title": "Wallpapercrop",
+          "type": "string"
+        }
+      },
+      "title": "StyleSheet",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "default": 1,
+      "title": "Schemaversion",
+      "type": "integer"
+    },
+    "id": {
+      "pattern": "^[a-z][a-z0-9-]{0,31}$",
+      "title": "Id",
+      "type": "string"
+    },
+    "name": {
+      "maxLength": 50,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "applicationId": {
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*){2,}$",
+      "title": "Applicationid",
+      "type": "string"
+    },
+    "versionCode": {
+      "default": 1,
+      "maximum": 2100000000,
+      "minimum": 1,
+      "title": "Versioncode",
+      "type": "integer"
+    },
+    "versionName": {
+      "default": "1.0.0",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "title": "Versionname",
+      "type": "string"
+    },
+    "coreVersion": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Coreversion",
+      "type": "string"
+    },
+    "featurePreset": {
+      "const": "standard",
+      "default": "standard",
+      "title": "Featurepreset",
+      "type": "string"
+    },
+    "style": {
+      "$ref": "#/$defs/StyleSheet"
+    },
+    "layout": {
+      "$ref": "#/$defs/LayoutSpec"
+    },
+    "assets": {
+      "items": {
+        "$ref": "#/$defs/Asset"
+      },
+      "maxItems": 500,
+      "title": "Assets",
+      "type": "array"
+    },
+    "iconMappings": {
+      "items": {
+        "$ref": "#/$defs/IconMapping"
+      },
+      "maxItems": 500,
+      "title": "Iconmappings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "applicationId"
+  ],
+  "title": "LauncherSpec",
+  "type": "object"
+}

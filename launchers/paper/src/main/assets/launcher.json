@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "paper",
+  "name": "Paper",
+  "applicationId": "dev.launcheratlas.paper",
+  "versionCode": 1,
+  "versionName": "1.0.0",
+  "coreVersion": "1.0.0",
+  "featurePreset": "standard",
+  "style": {
+    "background": "#F5F0E8",
+    "surface": "#FFFCF5",
+    "foreground": "#252820",
+    "accent": "#53624A",
+    "typography": "serif",
+    "material": "paper",
+    "iconShape": "rounded",
+    "iconSize": 52,
+    "showLabels": true,
+    "cornerRadius": 20,
+    "spacing": 8,
+    "shadow": 2,
+    "pageTransition": "slide",
+    "reducedMotion": "system",
+    "wallpaper": null,
+    "wallpaperCrop": "fill"
+  },
+  "layout": {
+    "template": "header-grid-dock",
+    "columns": 4,
+    "rows": 4,
+    "initialPages": 3,
+    "dockCapacity": 4,
+    "components": [
+      "clock",
+      "date",
+      "battery"
+    ],
+    "items": []
+  },
+  "assets": [],
+  "iconMappings": []
+}

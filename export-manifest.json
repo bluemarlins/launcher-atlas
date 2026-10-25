@@ -1,0 +1,10 @@
+{
+  "coreVersion": "1.0.0",
+  "launchers": [
+    "clay",
+    "neon",
+    "paper"
+  ],
+  "status": "exported",
+  "deviceVerified": false
+}

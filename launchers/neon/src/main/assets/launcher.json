@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "neon",
+  "name": "Neon",
+  "applicationId": "dev.launcheratlas.neon",
+  "versionCode": 1,
+  "versionName": "1.0.0",
+  "coreVersion": "1.0.0",
+  "featurePreset": "standard",
+  "style": {
+    "background": "#101821",
+    "surface": "#1B2934",
+    "foreground": "#E7FAF2",
+    "accent": "#B8F46A",
+    "typography": "mono",
+    "material": "neon",
+    "iconShape": "rounded",
+    "iconSize": 52,
+    "showLabels": true,
+    "cornerRadius": 14,
+    "spacing": 8,
+    "shadow": 10,
+    "pageTransition": "depth",
+    "reducedMotion": "system",
+    "wallpaper": null,
+    "wallpaperCrop": "fill"
+  },
+  "layout": {
+    "template": "header-grid-dock",
+    "columns": 4,
+    "rows": 4,
+    "initialPages": 3,
+    "dockCapacity": 4,
+    "components": [
+      "clock",
+      "date",
+      "battery"
+    ],
+    "items": []
+  },
+  "assets": [],
+  "iconMappings": []
+}
