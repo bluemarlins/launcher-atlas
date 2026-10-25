@@ -26,9 +26,15 @@ Windows: use `gradlew.bat`. APKs are in `launchers/<id>/build/outputs/apk/debug/
 
 ## What is supported
 
-Android 12+ phones in portrait, current personal profile, default HOME selection, app drawer/search/launch, editable pages and dock, folders, clock/date/battery, original app icon fallback, bundled image mappings, wallpaper application, and reduced motion. Home layout is saved separately from the default style SPEC. Updating the style preserves an existing user's grid and placement; reset is explicit.
+Android 12+ in the current personal profile, default HOME selection, app drawer/search/launch, paged Slot grids, dock, responsive folders, movable clock/date/battery Cells, third-party widgets, original app icon fallback, image mappings, wallpapers, and reduced motion.
 
-Third-party widgets, replacement of system authentication, Recents integration, work/private profiles and a real-time 3D engine are outside this release. Lock wallpaper does not replace the system lock screen. Browser previews are approximate; Android rendering is authoritative.
+Version 2 uses a fixed grid fitted to the available window. Apps occupy one Slot. Folders and widgets resize in grid increments; provider constraints apply to hosted widgets. Cells with the same span can form a mixed Stack. Swipe vertically to switch; hosted widgets use a visible edge rail so their inner controls remain interactive. Previous/next controls are also available from Stack editing.
+
+See the [Cell/SPEC contract](docs/cells.md) and [v2 verification record](docs/verification-v2.md).
+
+Portrait/landscape and compact/expanded/folding postures have separate placements and Grid settings with shared Cell content. Occluding hinges block intersecting Slots. A new profile is seeded once; existing placements are retained on updates. Before converting v1 data, the app preserves `workspace-v1.backup.json`; malformed data raises an error instead of resetting it.
+
+Replacement of system authentication, Recents integration, work/private profiles and a real-time 3D engine are outside this release. Lock wallpaper does not replace the system lock screen. Browser previews are approximate; Android rendering is authoritative. Public widget specifications contain provider references; binding IDs and approval results stay on each device.
 
 ## Assets and verification status
 
@@ -38,6 +44,6 @@ See [verification and release checklist](docs/release.md). Pixel/Galaxy physical
 
 ## 한국어
 
-공통 코어와 작품별 `launcher.json`·리소스로 구성한 런처 모음입니다. 위 명령으로 세 앱을 빌드하고 설치한 뒤 시스템에서 기본 홈으로 선택할 수 있습니다. 앱 서랍에서 앱을 길게 누르면 홈에 추가하며, 홈 아이템을 길게 누르면 이동·폴더·제거 작업을 할 수 있습니다. 드래그로 셀과 dock 사이를 이동할 수 있습니다. 초기 배치는 실제 설치 앱에 맞춰 사용자가 구성합니다.
+공통 코어와 작품별 `launcher.json`·리소스로 구성한 런처 모음입니다. 위 명령으로 세 앱을 빌드하고 설치한 뒤 시스템에서 기본 홈으로 선택합니다. 빈 Slot을 탭해 앱/위젯을 추가하고, 편집 모드에서 길게 눌러 이동하거나 모서리를 드래그해 크기를 조절합니다. 항목 편집에는 페이지 이동·폴더·동일 크기 Stack·크기 선택 버튼이 있습니다. Stack은 상하 Swipe로 전환하며 타사 위젯은 오른쪽 가장자리를 사용합니다. 앱은 1×1 고정이며 Dock에는 앱과 1×1 폴더만 놓습니다. 접힘/펼침·방향별 위치는 따로 저장하고 폴더 내용과 위젯 연결은 공유합니다. 실제 하드웨어 접힘과 OEM 위젯 호환성은 별도 검증이 필요합니다.
 
 코드는 MIT이며 외부 리소스의 배포 조건은 각 manifest를 따릅니다. 제작 도구·참조 이미지·프롬프트·서명키는 이 공개 트리에 포함하지 않습니다.

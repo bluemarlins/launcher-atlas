@@ -26,7 +26,7 @@ fun canonicalComponent(value: String): String {
     val iconMappings: List<IconMapping> = emptyList(),
 ) {
     fun validate(): LauncherSpec {
-        require(schemaVersion == 1 && coreVersion == "1.0.0" && featurePreset == "standard") { "Unsupported launcher SPEC" }
+        require(schemaVersion in 1..2 && coreVersion in listOf("1.0.0", "2.0.0") && featurePreset == "standard") { "Unsupported launcher SPEC" }
         require(id.matches(Regex("[a-z][a-z0-9-]{0,31}")))
         require(layout.columns in 3..6 && layout.rows in 2..6 && layout.initialPages in 1..9 && layout.dockCapacity in 1..6)
         require(style.iconSize in 40..64 && style.spacing in 0..24 && style.cornerRadius in 0..40 && style.shadow in 0..20)
@@ -41,9 +41,16 @@ fun canonicalComponent(value: String): String {
         require(style.wallpaper == null || style.wallpaper in assetIds)
         require(iconMappings.all { it.assetId in assetIds })
         require(iconMappings.map { it.component }.distinct().size == iconMappings.size)
-        val initial = WorkspaceEditor.initial(this, 0)
-        require(WorkspaceEditor.valid(initial)) { "Invalid initial placement" }
+        if (schemaVersion == 1) require(WorkspaceEditor.valid(WorkspaceEditor.initial(this, 0))) { "Invalid initial placement" }
+        else require(CellEditor.valid(initialCells(0))) { "Invalid initial Cell placement" }
         return this
+    }
+
+    fun initialCells(serial: Long): CellWorkspace {
+        if (schemaVersion == 1) return CellEditor.migrate(WorkspaceEditor.initial(this, serial))
+        return CellWorkspace(cells = layout.cells.map { it.runtime(serial) }, profiles = layout.profiles.ifEmpty {
+            listOf(ProfileLayout("compact-portrait-flat", GridSpec(layout.columns, layout.rows), layout.initialPages, layout.placements))
+        }, dockCapacity = layout.dockCapacity)
     }
 }
 
@@ -59,7 +66,18 @@ fun canonicalComponent(value: String): String {
     val template: String = "header-grid-dock", val columns: Int = 4, val rows: Int = 4,
     val initialPages: Int = 3, val dockCapacity: Int = 4,
     val components: List<String> = listOf("clock", "date", "battery"), val items: List<InitialItem> = emptyList(),
+    val cells: List<CellSpec> = emptyList(), val placements: List<CellPlacement> = emptyList(),
+    val profiles: List<ProfileLayout> = emptyList(),
 )
+// Public configuration intentionally has no runtime binding ID or user serial.
+@Serializable data class CellSpec(
+    val id: String, val kind: String = "app", val component: String = "", val label: String = "",
+    val children: List<String> = emptyList(), val widget: String = "", val provider: String = "",
+    val members: List<String> = emptyList(),
+) {
+    fun runtime(serial: Long) = Cell(id, kind, if (kind == "app") AppRef(canonicalComponent(component), serial) else null,
+        label, children.map { AppRef(canonicalComponent(it), serial) }, widget, provider, members = members)
+}
 @Serializable data class InitialItem(
     val id: String, val kind: String = "app", val component: String = "", val label: String = "",
     val children: List<String> = emptyList(), val page: Int = 0, val cell: Int = 0,

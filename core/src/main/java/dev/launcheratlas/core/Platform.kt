@@ -30,7 +30,7 @@ import java.text.Collator
 
 data class AppEntry(val ref: AppRef, val label: String, val icon: Drawable? = null)
 data class AtlasState(
-    val spec: LauncherSpec? = null, val workspace: WorkspaceState = WorkspaceState(),
+    val spec: LauncherSpec? = null, val workspace: CellWorkspace = CellWorkspace(),
     val apps: List<AppEntry> = emptyList(), val home: Boolean = false, val error: String? = null,
 )
 
@@ -38,7 +38,8 @@ class LauncherModel(private val application: Application) : AndroidViewModel(app
     private val launcherApps = application.getSystemService(LauncherApps::class.java)
     private val users = application.getSystemService(UserManager::class.java)
     private val serial = users.getSerialNumberForUser(Process.myUserHandle())
-    private val workspaceFile = AtomicFile(File(application.filesDir, "workspace-v1.json"))
+    private val workspaceFile = AtomicFile(File(application.filesDir, "workspace-v2.json"))
+    val widgets = AtlasWidgetHost(application)
     private val mutable = MutableStateFlow(AtlasState())
     val state = mutable.asStateFlow()
     private val callback = object : LauncherApps.Callback() {
@@ -53,11 +54,30 @@ class LauncherModel(private val application: Application) : AndroidViewModel(app
         runCatching {
             val spec = atlasJson.decodeFromString<LauncherSpec>(application.assets.open("launcher.json").bufferedReader().use { it.readText() }).validate()
             require(spec.applicationId == application.packageName) { "SPEC applicationId does not match this app" }
-            val saved = runCatching { workspaceFile.openRead().bufferedReader().use { it.readText() } }.getOrNull()
-            mutable.value = AtlasState(spec, WorkspaceEditor.restore(spec, saved, serial))
+            val workspace = loadWorkspace(spec)
+            widgets.reconcile(workspace)
+            mutable.value = AtlasState(spec, workspace)
             launcherApps.registerCallback(callback, Handler(Looper.getMainLooper()))
             refresh()
         }.onFailure { mutable.update { state -> state.copy(error = "설정 읽기 실패: ${it.message}") } }
+    }
+
+    private fun loadWorkspace(spec: LauncherSpec): CellWorkspace {
+        if (workspaceFile.baseFile.exists()) return atlasJson.decodeFromString<CellWorkspace>(workspaceFile.openRead().bufferedReader().use { it.readText() })
+            .also { require(CellEditor.valid(it)) { "저장된 v2 배치가 손상되었습니다. 원본을 보존했습니다." } }
+        val legacy = File(application.filesDir, "workspace-v1.json")
+        if (!legacy.exists()) return spec.initialCells(serial)
+        val text = legacy.readText()
+        val backup = File(application.filesDir, "workspace-v1.backup.json")
+        if (!backup.exists()) backup.writeText(text)
+        val migrated = CellEditor.migrate(atlasJson.decodeFromString<WorkspaceState>(text), listOf("clock", "date", "battery"))
+        var stream: java.io.FileOutputStream? = null
+        try {
+            stream = workspaceFile.startWrite()
+            stream.write(atlasJson.encodeToString(migrated).toByteArray())
+            workspaceFile.finishWrite(stream)
+        } catch (e: Exception) { workspaceFile.failWrite(stream); throw e }
+        return migrated
     }
 
     fun refresh() {
@@ -76,14 +96,16 @@ class LauncherModel(private val application: Application) : AndroidViewModel(app
         }
     }
 
-    fun save(workspace: WorkspaceState) {
-        if (!WorkspaceEditor.valid(workspace)) { error("잘못된 배치를 저장할 수 없습니다"); return }
+    fun save(workspace: CellWorkspace) {
+        if (state.value.spec == null || !CellEditor.valid(workspace)) { error("잘못된 배치를 저장할 수 없습니다"); return }
         var stream: java.io.FileOutputStream? = null
         try {
             stream = workspaceFile.startWrite()
             stream.write(atlasJson.encodeToString(workspace).toByteArray(Charsets.UTF_8))
             workspaceFile.finishWrite(stream)
+            val removedIds = state.value.workspace.cells.mapNotNull { it.appWidgetId }.toSet() - workspace.cells.mapNotNull { it.appWidgetId }.toSet()
             mutable.update { it.copy(workspace = workspace, error = null) }
+            removedIds.forEach(widgets::delete)
         } catch (exception: Exception) {
             workspaceFile.failWrite(stream)
             error("배치 저장 실패: ${exception.message}")
@@ -125,7 +147,8 @@ class LauncherModel(private val application: Application) : AndroidViewModel(app
         }
     }
 
-    fun reset() { state.value.spec?.let { save(WorkspaceEditor.initial(it, serial)) } }
+    fun profile(device: DeviceProfile) { runCatching { CellEditor.ensureProfile(state.value.workspace, device) }.onSuccess { if (it != state.value.workspace) save(it) }.onFailure { error(it.message) } }
+    fun reset() { state.value.spec?.let { save(it.initialCells(serial)) } }
     fun error(message: String?) { mutable.update { it.copy(error = message) } }
-    override fun onCleared() { runCatching { launcherApps.unregisterCallback(callback) } }
+    override fun onCleared() { runCatching { launcherApps.unregisterCallback(callback) }; widgets.stop() }
 }

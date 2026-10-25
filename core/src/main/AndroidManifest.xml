@@ -4,7 +4,7 @@
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
     </queries>
     <application android:allowBackup="false" android:supportsRtl="true" android:theme="@style/AtlasTheme">
-        <activity android:name="dev.launcheratlas.core.LauncherActivity" android:exported="true" android:launchMode="singleTask" android:screenOrientation="portrait">
+        <activity android:name="dev.launcheratlas.core.LauncherActivity" android:exported="true" android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />

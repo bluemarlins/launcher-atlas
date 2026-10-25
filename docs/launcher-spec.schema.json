@@ -40,6 +40,148 @@
       "title": "Asset",
       "type": "object"
     },
+    "CellPlacement": {
+      "additionalProperties": false,
+      "properties": {
+        "cellId": {
+          "title": "Cellid",
+          "type": "string"
+        },
+        "pageId": {
+          "default": 0,
+          "maximum": 98,
+          "minimum": -1,
+          "title": "Pageid",
+          "type": "integer"
+        },
+        "x": {
+          "default": 0,
+          "maximum": 5,
+          "minimum": 0,
+          "title": "X",
+          "type": "integer"
+        },
+        "y": {
+          "default": 0,
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Y",
+          "type": "integer"
+        },
+        "spanX": {
+          "default": 1,
+          "maximum": 6,
+          "minimum": 1,
+          "title": "Spanx",
+          "type": "integer"
+        },
+        "spanY": {
+          "default": 1,
+          "maximum": 6,
+          "minimum": 1,
+          "title": "Spany",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cellId"
+      ],
+      "title": "CellPlacement",
+      "type": "object"
+    },
+    "CellSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "default": "app",
+          "enum": [
+            "app",
+            "folder",
+            "builtin",
+            "widget",
+            "stack"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "component": {
+          "default": "",
+          "title": "Component",
+          "type": "string"
+        },
+        "label": {
+          "default": "",
+          "maxLength": 60,
+          "title": "Label",
+          "type": "string"
+        },
+        "children": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Children",
+          "type": "array"
+        },
+        "widget": {
+          "default": "",
+          "title": "Widget",
+          "type": "string"
+        },
+        "provider": {
+          "default": "",
+          "title": "Provider",
+          "type": "string"
+        },
+        "members": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Members",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "CellSpec",
+      "type": "object"
+    },
+    "GridSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "columns": {
+          "default": 4,
+          "maximum": 6,
+          "minimum": 1,
+          "title": "Columns",
+          "type": "integer"
+        },
+        "rows": {
+          "default": 5,
+          "maximum": 6,
+          "minimum": 1,
+          "title": "Rows",
+          "type": "integer"
+        },
+        "blocked": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 36,
+          "title": "Blocked",
+          "type": "array"
+        }
+      },
+      "title": "GridSpec",
+      "type": "object"
+    },
     "IconMapping": {
       "additionalProperties": false,
       "properties": {
@@ -172,9 +314,93 @@
           "maxItems": 330,
           "title": "Items",
           "type": "array"
+        },
+        "cells": {
+          "items": {
+            "$ref": "#/$defs/CellSpec"
+          },
+          "maxItems": 4000,
+          "title": "Cells",
+          "type": "array"
+        },
+        "placements": {
+          "items": {
+            "$ref": "#/$defs/CellPlacement"
+          },
+          "maxItems": 4000,
+          "title": "Placements",
+          "type": "array"
+        },
+        "profiles": {
+          "items": {
+            "$ref": "#/$defs/ProfileLayout"
+          },
+          "maxItems": 24,
+          "title": "Profiles",
+          "type": "array"
         }
       },
       "title": "LayoutSpec",
+      "type": "object"
+    },
+    "ProfileLayout": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "grid": {
+          "$ref": "#/$defs/GridSpec"
+        },
+        "pageCount": {
+          "default": 3,
+          "maximum": 99,
+          "minimum": 1,
+          "title": "Pagecount",
+          "type": "integer"
+        },
+        "placements": {
+          "items": {
+            "$ref": "#/$defs/CellPlacement"
+          },
+          "maxItems": 4000,
+          "title": "Placements",
+          "type": "array"
+        },
+        "stacks": {
+          "items": {
+            "$ref": "#/$defs/StackState"
+          },
+          "maxItems": 1000,
+          "title": "Stacks",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "ProfileLayout",
+      "type": "object"
+    },
+    "StackState": {
+      "additionalProperties": false,
+      "properties": {
+        "cellId": {
+          "title": "Cellid",
+          "type": "string"
+        },
+        "activeId": {
+          "title": "Activeid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cellId",
+        "activeId"
+      ],
+      "title": "StackState",
       "type": "object"
     },
     "StyleSheet": {
@@ -315,8 +541,11 @@
   "additionalProperties": false,
   "properties": {
     "schemaVersion": {
-      "const": 1,
-      "default": 1,
+      "default": 2,
+      "enum": [
+        1,
+        2
+      ],
       "title": "Schemaversion",
       "type": "integer"
     },
@@ -350,8 +579,11 @@
       "type": "string"
     },
     "coreVersion": {
-      "const": "1.0.0",
-      "default": "1.0.0",
+      "default": "2.0.0",
+      "enum": [
+        "1.0.0",
+        "2.0.0"
+      ],
       "title": "Coreversion",
       "type": "string"
     },

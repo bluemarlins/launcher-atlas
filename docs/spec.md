@@ -1,20 +1,20 @@
-# Launcher SPEC v1
+# Launcher SPEC v2
 
 `launchers/<id>/src/main/assets/launcher.json` is the complete, offline runtime contract. [JSON Schema](launcher-spec.schema.json) describes the editable format. The Android parser rejects unsupported schema/core versions.
 
 | Group | Contract |
 |---|---|
-| Identity | `id`, `name`, stable `applicationId`, increasing `versionCode`, `versionName`, `coreVersion=1.0.0` |
+| Identity | `schemaVersion=2`, `id`, `name`, stable `applicationId`, increasing `versionCode`, `versionName`, `coreVersion=2.0.0` |
 | Style | Background/surface/foreground/accent `#RRGGBB`, typography, shape, icon size, labels, spacing, shadow, transition, reduced motion, optional wallpaper asset and crop |
-| Layout | `header-grid-dock`, columns 3–6, rows 2–6, initial pages 1–9, dock 1–6, clock/date/battery header slots, initial items |
+| Layout | Cell grid and dock, base columns 3–6 / rows 2–6, initial pages 1–9, dock 1–6, shared Cells and profile-specific span placements |
 | Assets | Unique ID, `media/<safe-name>.png`, SHA-256, source and distribution terms |
 | Icon mappings | Android `package/activity` component → asset ID; unmapped/missing image uses original app icon |
 
 `com.example/com.example.Main` and `com.example/.Main` identify the same component. Factory writes the short form; Android normalizes both. Personal-profile serial numbers are assigned when the defaults become a user's workspace.
 
-An initial item has `id`, `kind` (`app` or `folder`), `page`, `cell` and either `component` or folder `children` plus `label`. `page=-1` means dock; cell indexes start at 0 in row order. IDs and occupied cells must be unique. The starter specs intentionally have empty placements; users add installed apps through the launcher.
+v2 separates `layout.cells` from `layout.placements` or explicit `layout.profiles`. A Cell contains app/folder/builtin/widget/Stack content. A placement contains `cellId`, `pageId`, `x`, `y`, `spanX`, `spanY`; `pageId=-1` means dock. All occupied Slots must be unique. The starter specs contain movable builtin widgets; users add their installed apps. See the [Cell contract](cells.md) for mixed Stack and display-profile rules. The legacy template identifier `header-grid-dock` remains for import compatibility; v2 has no fixed header area.
 
-The installed user's `workspace-v1.json` is private app state, separate from this file. Existing columns/rows/pages/placements survive a style update. Explicit layout reset applies new defaults. Missing apps retain their placement so reinstalling the same component restores it.
+The installed user's `workspace-v2.json` is private app state, separate from this file. Existing profile grids/pages/placements survive a style update. Explicit layout reset applies new defaults to all displays. Missing apps retain their placement so reinstalling the same component restores it. v1 imports are supported and Android preserves `workspace-v1.backup.json` before converting legacy items. Runtime widget binding IDs are never part of the public SPEC.
 
 `material` records resource art direction; color, shapes, shadows, imported raster artwork and transition parameters determine actual rendering. It does not synthesize a 3D bitmap or enable a 3D engine.
 

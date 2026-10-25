@@ -18,6 +18,7 @@ android {
 }
 kotlin { jvmToolchain(17) }
 dependencies {
+    implementation("androidx.window:window:1.5.1")
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
