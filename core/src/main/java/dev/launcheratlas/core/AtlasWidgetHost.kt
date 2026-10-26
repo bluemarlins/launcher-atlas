@@ -21,7 +21,9 @@ import kotlin.math.ceil
 
 class AtlasWidgetHost(private val context: Context) {
     val manager: AppWidgetManager = AppWidgetManager.getInstance(context)
-    val host = AppWidgetHost(context, 2048)
+    val host = object:AppWidgetHost(context,2048) {
+        override fun onCreateView(context:Context,id:Int,info:AppWidgetProviderInfo):android.appwidget.AppWidgetHostView = CellWidgetHostView(context)
+    }
     private val preferences = context.getSharedPreferences("widget-bindings", Context.MODE_PRIVATE)
     var pending: PendingWidget?
         get() = preferences.getString("pending", null)?.let { runCatching { atlasJson.decodeFromString<PendingWidget>(it) }.getOrNull() }

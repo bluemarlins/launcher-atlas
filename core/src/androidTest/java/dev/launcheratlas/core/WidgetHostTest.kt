@@ -129,9 +129,51 @@ class WidgetHostTest {
         androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom(android.widget.ListView::class.java)).perform(androidx.test.espresso.action.ViewActions.swipeUp())
         androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom(android.widget.ListView::class.java)).check { view, _ -> assertTrue((view as android.widget.ListView).firstVisiblePosition>0) }
         compose.runOnIdle { assertEquals("w",CellEditor.active(state,state.activeProfileId!!,"s")?.id) }
+        androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText("Widget action")).perform(androidx.test.espresso.action.ViewActions.longClick())
+        compose.onNodeWithTag("cell-selection").assertExists()
+        compose.runOnIdle {assertEquals(id,state.cells.first {it.id=="w"}.appWidgetId);assertNotNull(host.info(id))}
+        compose.onNodeWithText("완료").performClick()
+        compose.onNodeWithTag("cell-selection").assertDoesNotExist()
         compose.onNodeWithContentDescription("Stack 다음").performClick()
         compose.onNodeWithContentDescription("clock").assertExists()
         compose.runOnIdle { assertNotNull(host.info(id)) }
         host.stop(); host.delete(id)
+    }
+    @Test fun staticWidgetTapDoesNotBecomeLongPressAfterRelease() {
+        val host=host();host.cancel()
+        val provider=host.providers().first {it.provider==ComponentName(context,FixtureWidget::class.java)}
+        assertTrue(host.begin(provider,"seed",CellPlacement("w",spanX=2,spanY=2),listOf(CellSize(2,2))))
+        var state by mutableStateOf(host.commit(CellWorkspace(profiles=listOf(ProfileLayout("seed")))))
+        val id=state.cells.single().appWidgetId!!
+        val views=RemoteViews(context.packageName,android.R.layout.simple_list_item_1)
+        views.setTextViewText(android.R.id.text1,"Static widget")
+        host.manager.updateAppWidget(id,views);host.start()
+        compose.setContent {AtlasTheme(StyleSheet()) {LauncherScreen(LauncherSpec(id="test",name="Test",applicationId="dev.launcheratlas.test"),state,emptyList(),true,{}, {}, {state=it}, {}, {},host)}}
+        androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText("Static widget")).perform(androidx.test.espresso.action.ViewActions.click())
+        Thread.sleep(android.view.ViewConfiguration.getLongPressTimeout()+150L)
+        compose.onNodeWithTag("cell-selection").assertDoesNotExist()
+        val slot=compose.onNodeWithContentDescription("셀 1 앱 추가").fetchSemanticsNode().boundsInRoot.width
+        androidx.test.espresso.Espresso.onView(androidx.test.espresso.matcher.ViewMatchers.withText("Static widget")).perform(object:androidx.test.espresso.ViewAction {
+            override fun getConstraints()=androidx.test.espresso.matcher.ViewMatchers.isDisplayed()
+            override fun getDescription()="Long press and continue dragging a native widget"
+            override fun perform(controller:androidx.test.espresso.UiController,view:android.view.View) {
+                val location=IntArray(2);view.getLocationOnScreen(location)
+                val x=location[0]+view.width/2f;val y=location[1]+view.height/2f
+                val started=android.os.SystemClock.uptimeMillis()
+                fun send(action:Int,px:Float) {
+                    val event=android.view.MotionEvent.obtain(started,android.os.SystemClock.uptimeMillis(),action,px,y,0)
+                    event.source=android.view.InputDevice.SOURCE_TOUCHSCREEN
+                    try {assertTrue(controller.injectMotionEvent(event))} finally {event.recycle()}
+                }
+                send(android.view.MotionEvent.ACTION_DOWN,x)
+                controller.loopMainThreadForAtLeast(android.view.ViewConfiguration.getLongPressTimeout()+100L)
+                send(android.view.MotionEvent.ACTION_MOVE,x+slot)
+                controller.loopMainThreadForAtLeast(30)
+                send(android.view.MotionEvent.ACTION_UP,x+slot)
+            }
+        })
+        compose.onNodeWithTag("cell-selection").assertExists()
+        compose.runOnIdle {assertEquals(1,state.profiles.first {it.id==state.activeProfileId}.placements.single().x);assertEquals(id,state.cells.single().appWidgetId)}
+        host.stop();host.delete(id)
     }
 }

@@ -5,8 +5,6 @@ import android.graphics.BitmapFactory
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -24,6 +22,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
@@ -46,6 +46,7 @@ import kotlin.math.roundToInt
     posture: String = "flat", hinge: Rect? = null,
 ) {
     val context = LocalContext.current
+    val haptic=LocalHapticFeedback.current
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
     val scope = rememberCoroutineScope()
@@ -56,6 +57,9 @@ import kotlin.math.roundToInt
     var query by remember { mutableStateOf("") }
     var addAt by remember { mutableStateOf<CellPlacement?>(null) }
     var addKind by remember { mutableStateOf("app") }
+    var selectionId by remember { mutableStateOf<String?>(null) }
+    var resizeBase by remember { mutableStateOf<CellPlacement?>(null) }
+    var resizeProfile by remember { mutableStateOf<String?>(null) }
     var menuId by remember { mutableStateOf<String?>(null) }
     var folderId by remember { mutableStateOf<String?>(null) }
     var settings by remember { mutableStateOf(false) }
@@ -66,6 +70,7 @@ import kotlin.math.roundToInt
     var slotWidth by remember { mutableFloatStateOf(80f) }
     var slotHeight by remember { mutableFloatStateOf(90f) }
     var dragId by remember { mutableStateOf<String?>(null) }
+    var dragGrab by remember { mutableStateOf(Offset.Zero) }
     var dragPoint by remember { mutableStateOf(Offset.Zero) }
     var resizing by remember { mutableStateOf<CellPlacement?>(null) }
     var collision by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -100,24 +105,47 @@ import kotlin.math.roundToInt
             val old = p.placements.find { it.cellId == id }
             if (target != null && old != null) {
                 val cols = if (target.first == -1) s.dockCapacity else p.grid.columns
-                val candidate = old.copy(pageId = target.first, x = target.second % cols, y = if (target.first == -1) 0 else target.second / cols)
+                val candidate = old.copy(pageId = target.first, x = target.second % cols - kotlin.math.floor(dragGrab.x/(slotWidth*density.density)).toInt(), y = if (target.first == -1) 0 else target.second / cols - kotlin.math.floor(dragGrab.y/(slotHeight*density.density)).toInt())
                 val hit = p.placements.firstOrNull { it.cellId != id && it.pageId == candidate.pageId && CellEditor.slots(it, cols).any(CellEditor.slots(candidate, cols)::contains) }
-                if (hit != null) collision = id to hit.cellId else latestSave(CellEditor.place(s, p.id, candidate))
+                if(candidate!=old) {
+                    if(hit!=null) collision=id to hit.cellId else {
+                        val next=CellEditor.place(s,p.id,candidate)
+                        if(next!=s) latestSave(next)
+                    }
+                }
             }
         }
         dragId = null
     }
 
-    BackHandler(drawer || settings || menuId != null || folderId != null || addAt != null || editing) {
-        drawer = false; settings = false; menuId = null; folderId = null; addAt = null; editing = false
+    fun clearSelection() { selectionId=null;resizing=null;resizeBase=null;resizeProfile=null;dragId=null }
+    fun select(id:String) { if(selectionId!=id) { resizing=null;resizeBase=null;selectionId=id;haptic.performHapticFeedback(HapticFeedbackType.LongPress) } }
+    fun resizeValid(p:CellPlacement):Boolean = latestProfile?.let { profile ->
+        latestWorkspace.cells.find { it.id==p.cellId }?.let { CellEditor.allowed(latestWorkspace,it,CellSize(p.spanX,p.spanY),profile) && CellEditor.fits(profile,p,latestWorkspace.dockCapacity) }
+    }==true
+    fun finishResize() {
+        val base=resizeBase;val candidate=resizing;val p=latestProfile
+        if(base!=null && candidate!=null && p!=null && p.id==resizeProfile && p.placements.find { it.cellId==base.cellId }==base && resizeValid(candidate)) {
+            val next=CellEditor.place(latestWorkspace,p.id,candidate)
+            if(next!=latestWorkspace) latestSave(next)
+        }
+        resizing=null;resizeBase=null;resizeProfile=null
+    }
+    LaunchedEffect(profileId,pager.currentPage) { clearSelection();menuId=null }
+    LaunchedEffect(workspace.cells.map { it.id }) { if(selectionId!=null && workspace.cells.none { it.id==selectionId }) clearSelection() }
+    BackHandler(drawer || settings || menuId != null || folderId != null || addAt != null || editing || selectionId!=null) {
+        drawer=false;settings=false;menuId=null;folderId=null;addAt=null
+        if(selectionId!=null) clearSelection() else editing=false
     }
     Box(Modifier.fillMaxSize().background(color(spec.style.background))) {
         wallpaper?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = if (spec.style.wallpaperCrop == "fit") androidx.compose.ui.layout.ContentScale.Fit else androidx.compose.ui.layout.ContentScale.Crop) }
+        if(selectionId!=null) Box(Modifier.matchParentSize().clickable { clearSelection() })
         Column(Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 12.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(spec.name.uppercase(), style = MaterialTheme.typography.titleLarge, color = color(spec.style.accent))
                 Row {
-                    TextButton({ editing = !editing }, Modifier.semantics { contentDescription = "배치 편집" }) { Text(if (editing) "완료" else "편집") }
+                    if(selectionId!=null) TextButton({ menuId=selectionId }) { Text("옵션") }
+                    TextButton({ if(editing || selectionId!=null) { clearSelection();editing=false } else editing=true }, Modifier.semantics { contentDescription = "배치 편집" }) { Text(if (editing || selectionId!=null) "완료" else "편집") }
                     TextButton({ settings = true }, Modifier.semantics { contentDescription = "런처 설정" }) { Text("설정") }
                 }
             }
@@ -160,7 +188,7 @@ import kotlin.math.roundToInt
                     LaunchedEffect(blocked, profileId) {
                         if (profile.grid.blocked != blocked) runCatching { CellEditor.regrid(latestWorkspace, id, profile.grid.copy(blocked = blocked)) }.onSuccess(latestSave).onFailure { message = it.message }
                     }
-                    HorizontalPager(pager, Modifier.fillMaxSize().onGloballyPositioned { gridBounds = it.boundsInRoot() }, userScrollEnabled = dragId == null && resizing == null && !editing) { page ->
+                    HorizontalPager(pager, Modifier.fillMaxSize().onGloballyPositioned { gridBounds = it.boundsInRoot() }, userScrollEnabled = dragId == null && resizing == null && !editing && selectionId==null) { page ->
                         Box(Modifier.fillMaxSize().graphicsLayer {
                             val offset = ((pager.currentPage - page) + pager.currentPageOffsetFraction).coerceIn(-1f, 1f)
                             if (!motionOff) when (spec.style.pageTransition) {
@@ -172,7 +200,7 @@ import kotlin.math.roundToInt
                                 val blockedSlot = i in profile.grid.blocked
                                 Box(Modifier.offset((slotWidth * (i % profile.grid.columns)).dp, (slotHeight * (i / profile.grid.columns)).dp)
                                     .size(slotWidth.dp, slotHeight.dp).onGloballyPositioned { bounds[page to i] = it.boundsInRoot() }
-                                    .padding(3.dp).then(if (!blockedSlot) Modifier.clickable { addAt = CellPlacement("", page, i % profile.grid.columns, i / profile.grid.columns) } else Modifier)
+                                    .padding(3.dp).then(if (!blockedSlot) Modifier.clickable { if(selectionId!=null) clearSelection() else addAt = CellPlacement("", page, i % profile.grid.columns, i / profile.grid.columns) } else Modifier)
                                     .semantics { contentDescription = if (blockedSlot) "경첩 영역" else "셀 ${i + 1} 앱 추가" }, contentAlignment = Alignment.Center) {
                                     if (editing && !blockedSlot) Text("+", color = color(spec.style.foreground).copy(alpha = .25f))
                                 }
@@ -180,17 +208,24 @@ import kotlin.math.roundToInt
                             profile.placements.filter { it.pageId == page }.forEach { placement ->
                                 val cell = byId[placement.cellId] ?: return@forEach
                                 key(cell.id) {
+                                    val shown=resizing?.takeIf { it.cellId==cell.id && resizeValid(it) } ?: placement
                                     val active = CellEditor.active(workspace, profileId, cell.id) ?: cell
-                                    val base = Modifier.offset((placement.x * slotWidth).dp, (placement.y * slotHeight).dp).size((placement.spanX * slotWidth).dp, (placement.spanY * slotHeight).dp)
+                                    val base = Modifier.offset((shown.x * slotWidth).dp, (shown.y * slotHeight).dp).size((shown.spanX * slotWidth).dp, (shown.spanY * slotHeight).dp)
                                         .onGloballyPositioned { cellBounds[cell.id] = it.boundsInRoot() }
-                                    val dragModifier = if (editing) Modifier.pointerInput(cell.id) {
-                                        detectDragGesturesAfterLongPress(onDragStart = { dragId = cell.id; dragPoint = (cellBounds[cell.id]?.topLeft ?: Offset.Zero) + it },
-                                            onDrag = { change, amount -> change.consume(); dragPoint += amount }, onDragEnd = ::finishDrag, onDragCancel = { dragId = null })
+                                    val nativeWidget=active.kind=="widget" && active.appWidgetId!=null && widgetHost?.info(active.appWidgetId)!=null && !editing && selectionId==null && page==pager.currentPage
+                                    val beginMove:(Offset)->Unit={ point -> dragId=cell.id;dragGrab=point;dragPoint=(cellBounds[cell.id]?.topLeft ?: Offset.Zero)+point }
+                                    val nativeGesture=if(nativeWidget) WidgetCellGesture({select(cell.id)},
+                                        { point -> beginMove(point+Offset(spec.style.spacing/2f*density.density,spec.style.spacing/2f*density.density)) },
+                                        { delta -> dragPoint+=delta },::finishDrag,{dragId=null}) else null
+                                    val dragModifier=if(!nativeWidget) Modifier.pointerInput(cell.id,profileId,page==pager.currentPage) {
+                                        cellMoveGesture({selectionId==cell.id},{select(cell.id)},
+                                            { point -> dragId=cell.id;dragGrab=point;dragPoint=(cellBounds[cell.id]?.topLeft ?: Offset.Zero)+point },
+                                            { delta -> dragPoint+=delta },::finishDrag,{dragId=null})
                                     } else Modifier
                                     Box(base.then(dragModifier).padding((spec.style.spacing / 2f).dp)) {
-                                        CellContent(active, spec, appMap, widgetHost, editing, Modifier.fillMaxSize(),
-                                            { if (editing) menuId = cell.id else if (active.kind == "folder") folderId = active.id else active.app?.let(onLaunch) },
-                                            { menuId = cell.id })
+                                        CellContent(active,spec,appMap,widgetHost,editing || selectionId!=null,Modifier.fillMaxSize(),
+                                            { if(editing || selectionId!=null) select(cell.id) else if(active.kind=="folder") folderId=active.id else active.app?.let(onLaunch) },
+                                            {select(cell.id)},nativeGesture)
                                         if (cell.kind == "stack") {
                                             val swipe = Modifier.pointerInput(cell.id) {
                                                 var total = 0f
@@ -198,49 +233,53 @@ import kotlin.math.roundToInt
                                                     onDragEnd = { if (abs(total) > 36 * density.density) latestSave(CellEditor.cycle(latestWorkspace, profileId, cell.id, if (total < 0) 1 else -1)) })
                                             }
                                             // Hosted widgets keep their own touch stream except this explicit edge rail.
-                                            if (!editing) Box((if (active.kind == "widget") Modifier.align(Alignment.CenterEnd).width(24.dp).fillMaxHeight()
-                                                .background(color(spec.style.surface).copy(alpha = .55f)).combinedClickable(onClick = { onWorkspace(CellEditor.cycle(workspace, profileId, cell.id, 1)) }, onLongClick = { menuId = cell.id })
+                                            if (!editing && selectionId==null) Box((if (active.kind == "widget") Modifier.align(Alignment.CenterEnd).width(24.dp).fillMaxHeight()
+                                                .background(color(spec.style.surface).copy(alpha = .55f)).combinedClickable(onClick = { onWorkspace(CellEditor.cycle(workspace, profileId, cell.id, 1)) }, onLongClick = { select(cell.id) })
                                                 .semantics { contentDescription = "Stack 다음" }
                                             else Modifier.fillMaxSize().combinedClickable(
-                                                onClick = { if (active.kind == "folder") folderId = active.id else active.app?.let(onLaunch) }, onLongClick = { menuId = cell.id })).then(swipe), contentAlignment = Alignment.Center) { if (active.kind == "widget") Text("↕", fontSize = 12.sp) }
-                                            if (active.kind != "widget") Row(Modifier.align(Alignment.BottomCenter).background(color(spec.style.surface).copy(alpha = .9f))) {
+                                                onClick = { if (active.kind == "folder") folderId = active.id else active.app?.let(onLaunch) }, onLongClick = { select(cell.id) })).then(swipe), contentAlignment = Alignment.Center) { if (active.kind == "widget") Text("↕", fontSize = 12.sp) }
+                                            if (active.kind != "widget" && !editing && selectionId==null) Row(Modifier.align(Alignment.BottomCenter).background(color(spec.style.surface).copy(alpha = .9f))) {
                                                 TextButton({ onWorkspace(CellEditor.cycle(workspace, profileId, cell.id, -1)) }, contentPadding = PaddingValues(0.dp), modifier = Modifier.sizeIn(minWidth = 32.dp, minHeight = 32.dp).semantics { contentDescription = "Stack 이전" }) { Text("↓") }
                                                 TextButton({ onWorkspace(CellEditor.cycle(workspace, profileId, cell.id, 1)) }, contentPadding = PaddingValues(0.dp), modifier = Modifier.sizeIn(minWidth = 32.dp, minHeight = 32.dp).semantics { contentDescription = "Stack 다음" }) { Text("↑") }
                                             }
                                         }
-                                        if (editing && cell.kind != "app") Box(Modifier.align(Alignment.BottomEnd).size(32.dp).background(color(spec.style.accent)).pointerInput(cell.id, placement) {
-                                            var delta = Offset.Zero
-                                            detectDragGestures(onDragStart = { delta = Offset.Zero; resizing = placement }, onDrag = { change, amount ->
-                                                change.consume(); delta += amount
-                                                resizing = placement.copy(spanX = (placement.spanX + delta.x / (slotWidth * density.density)).roundToInt().coerceAtLeast(1), spanY = (placement.spanY + delta.y / (slotHeight * density.density)).roundToInt().coerceAtLeast(1))
-                                            }, onDragCancel = { resizing = null }, onDragEnd = { resizing?.let { latestSave(CellEditor.place(latestWorkspace, profileId, it)) }; resizing = null })
-                                        }.clickable { menuId = cell.id }.semantics { contentDescription = "크기 조절" }, contentAlignment = Alignment.Center) { Text("↘", color = color(spec.style.background)) }
                                     }
                                 }
                             }
-                            val preview = resizing ?: dragId?.let { drag ->
+                            val preview = if(resizing!=null) null else dragId?.let { drag ->
                                 val hit = bounds.entries.firstOrNull { it.key.first == page && it.value.contains(dragPoint) }?.key?.second
-                                profile.placements.find { it.cellId == drag }?.let { old -> hit?.let { old.copy(x = it % profile.grid.columns, y = it / profile.grid.columns) } }
+                                profile.placements.find { it.cellId == drag }?.let { old -> hit?.let { old.copy(x = it % profile.grid.columns-kotlin.math.floor(dragGrab.x/(slotWidth*density.density)).toInt(), y = it / profile.grid.columns-kotlin.math.floor(dragGrab.y/(slotHeight*density.density)).toInt()) } }
                             }
                             preview?.takeIf { it.pageId == page }?.let { p -> Box(Modifier.offset((p.x * slotWidth).dp, (p.y * slotHeight).dp).size((p.spanX * slotWidth).dp, (p.spanY * slotHeight).dp)
                                 .border(3.dp, if (CellEditor.fits(profile, p, workspace.dockCapacity) && byId[p.cellId]?.let { CellEditor.allowed(workspace, it, CellSize(p.spanX, p.spanY), profile) } == true) color(spec.style.accent) else androidx.compose.ui.graphics.Color.Red)) }
+                            profile.placements.find { it.cellId==selectionId && it.pageId==page }?.let { base ->
+                                val cell=byId[base.cellId]!!
+                                CellSelectionOverlay(base,resizing,resizeEdges(workspace,cell,base,profile),slotWidth,slotHeight,profile.grid.columns*slotWidth,profile.grid.rows*slotHeight,color(spec.style.accent),resizing?.let(::resizeValid) ?: true,
+                                    { edge,delta -> val candidate=resizePlacement(base,edge,delta);if(resizeValid(candidate)) { commit(CellEditor.place(workspace,profileId,candidate));true } else false },
+                                    { resizeBase=base;resizeProfile=profileId;resizing=base },
+                                    { edge,slots -> resizeBase?.let { resizing=resizePlacement(it,edge,slots) } },::finishResize,
+                                    {resizing=null;resizeBase=null;resizeProfile=null})
+                            }
                         }
                     }
                 }
             }
             if (profile?.unplaced?.isNotEmpty()==true) TextButton({ settings=true }) { Text("이 화면에 맞지 않는 Cell ${profile.unplaced.size}개 · 보류 목록") }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                repeat(profile?.pageCount ?: 1) { page -> TextButton({ scope.launch { if (motionOff) pager.scrollToPage(page) else pager.animateScrollToPage(page) } }, contentPadding = PaddingValues(0.dp), modifier = Modifier.widthIn(min = 28.dp).semantics { contentDescription = "페이지 ${page + 1}" }) { Text(if (pager.currentPage == page) "●" else "○") } }
+                repeat(profile?.pageCount ?: 1) { page -> TextButton({ clearSelection();scope.launch { if (motionOff) pager.scrollToPage(page) else pager.animateScrollToPage(page) } }, contentPadding = PaddingValues(0.dp), modifier = Modifier.widthIn(min = 28.dp).semantics { contentDescription = "페이지 ${page + 1}" }) { Text(if (pager.currentPage == page) "●" else "○") } }
             }
             Row(Modifier.fillMaxWidth().height(88.dp).clip(RoundedCornerShape(spec.style.cornerRadius.dp)).background(color(spec.style.surface))) {
                 repeat(workspace.dockCapacity) { i ->
                     val p = profile?.placements?.find { it.pageId == -1 && it.x == i }
                     val c = byId[p?.cellId]
                     Box(Modifier.weight(1f).fillMaxHeight().onGloballyPositioned { bounds[-1 to i] = it.boundsInRoot() }
-                        .then(if (editing && c != null) Modifier.pointerInput(c.id) { detectDragGesturesAfterLongPress(
-                            onDragStart = { dragId = c.id; dragPoint = (bounds[-1 to i]?.topLeft ?: Offset.Zero) + it }, onDrag = { change, amount -> change.consume(); dragPoint += amount }, onDragEnd = ::finishDrag, onDragCancel = { dragId = null }) } else Modifier), contentAlignment = Alignment.Center) {
-                        if (c == null) TextButton({ addAt = CellPlacement("", -1, i) }, Modifier.semantics { contentDescription = "Dock ${i + 1} 앱 추가" }) { Text("+") }
-                        else CellContent(c, spec, appMap, widgetHost, editing, Modifier.fillMaxSize(), { if (editing) menuId = c.id else if (c.kind == "folder") folderId = c.id else c.app?.let(onLaunch) }, { menuId = c.id })
+                        .then(if(c!=null) Modifier.pointerInput(c.id,profileId,pager.currentPage) {
+                            cellMoveGesture({selectionId==c.id},{select(c.id)}, {point -> dragId=c.id;dragGrab=point;dragPoint=(bounds[-1 to i]?.topLeft ?: Offset.Zero)+point},
+                                {delta -> dragPoint+=delta},::finishDrag,{dragId=null})
+                        } else Modifier), contentAlignment=Alignment.Center) {
+                        if(c==null) TextButton({if(selectionId!=null) clearSelection() else addAt=CellPlacement("",-1,i)},Modifier.semantics {contentDescription="Dock ${i+1} 앱 추가"}) {Text("+")}
+                        else CellContent(c,spec,appMap,widgetHost,editing || selectionId!=null,Modifier.fillMaxSize().then(if(selectionId==c.id) Modifier.border(2.dp,color(spec.style.accent)) else Modifier),
+                            {if(editing || selectionId!=null) select(c.id) else if(c.kind=="folder") folderId=c.id else c.app?.let(onLaunch)}, {select(c.id)})
                     }
                 }
             }
@@ -282,13 +321,6 @@ import kotlin.math.roundToInt
             var name by remember(selected.id) { mutableStateOf(selected.label) }
             OutlinedTextField(name, { name = it }, label = { Text("폴더 이름") })
             TextButton({ onWorkspace(CellEditor.rename(workspace, selected.id, name)) }) { Text("이름 저장") }
-        }
-        if (selected.kind != "app" && selectedPlacement.pageId >= 0) {
-            Text("크기 ${selectedPlacement.spanX} × ${selectedPlacement.spanY} · 빈 Slot에만 적용")
-            (1..profile.grid.rows).forEach { y -> Row { (1..profile.grid.columns).forEach { x ->
-                val next = selectedPlacement.copy(spanX = x, spanY = y)
-                TextButton(enabled = CellEditor.allowed(workspace, selected, CellSize(x,y), profile) && CellEditor.fits(profile, next, workspace.dockCapacity), onClick = { commit(CellEditor.place(workspace, profileId, next)) }, contentPadding = PaddingValues(2.dp), modifier = Modifier.weight(1f)) { Text("$x×$y", fontSize = 12.sp) }
-            } } }
         }
         (-1 until profile.pageCount).forEach { page ->
             val destination = CellEditor.free(profile, selected.id, CellSize(selectedPlacement.spanX,selectedPlacement.spanY), workspace.dockCapacity, page)
@@ -386,7 +418,7 @@ private fun cellLabel(c: Cell, apps: Map<AppRef, AppEntry>): String = when (c.ki
     else -> "위젯 · ${c.provider.substringBefore('/')}"
 }
 
-@Composable private fun CellContent(c: Cell, spec: LauncherSpec, apps: Map<AppRef, AppEntry>, host: AtlasWidgetHost?, editing: Boolean, modifier: Modifier, click: () -> Unit, longClick: () -> Unit) {
+@Composable private fun CellContent(c: Cell, spec: LauncherSpec, apps: Map<AppRef, AppEntry>, host: AtlasWidgetHost?, editing: Boolean, modifier: Modifier, click: () -> Unit, longClick: () -> Unit, widgetGesture:WidgetCellGesture?=null) {
     val label = cellLabel(c, apps)
     BoxWithConstraints(modifier.clip(RoundedCornerShape(spec.style.cornerRadius.dp)).then(
         if (c.kind != "widget" || editing || c.appWidgetId == null || host?.info(c.appWidgetId) == null) Modifier.combinedClickable(onClick = if (c.kind == "widget" && !editing) longClick else click, onLongClick = if (editing) null else longClick).semantics { contentDescription = label } else Modifier)) {
@@ -415,7 +447,7 @@ private fun cellLabel(c: Cell, apps: Map<AppRef, AppEntry>): String = when (c.ki
                 val id = c.appWidgetId
                 if (id != null && host?.info(id) != null) key(id) {
                     AndroidView(factory = { ctx -> host.createView(ctx, id) ?: android.widget.TextView(ctx).apply { text = "위젯을 불러올 수 없습니다" } }, modifier = Modifier.fillMaxSize(),
-                        update = { view -> if (view is android.appwidget.AppWidgetHostView) host.updateSize(view, contentWidth.value, contentHeight.value) },
+                        update = { view -> if (view is android.appwidget.AppWidgetHostView) host.updateSize(view, contentWidth.value, contentHeight.value).also { (view as? CellWidgetHostView)?.gesture=widgetGesture } },
                         onRelease = { view -> (view.parent as? android.view.ViewGroup)?.removeView(view) })
                 } else Text("위젯 연결 필요\n${c.provider.substringBefore('/')}", Modifier.align(Alignment.Center).padding(8.dp), fontSize = 12.sp)
                 if (editing) Box(Modifier.fillMaxSize().background(color(spec.style.accent).copy(alpha = .12f)).clickable(onClick = click))

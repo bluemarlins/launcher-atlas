@@ -13,6 +13,75 @@ class LauncherScreenTest {
     private val spec = LauncherSpec(id = "paper", name = "Paper", applicationId = "dev.launcheratlas.paper")
     private val apps = listOf(AppEntry(AppRef("com.camera/.Main", 0), "Camera"), AppEntry(AppRef("com.notes/.Main", 0), "Notes"))
 
+    @Test fun longPressSelectsWithoutOpeningNumericMenuAndLeftHandleCommitsOnce() {
+        val cell=Cell("f","folder",label="Tools",children=listOf(apps[0].ref))
+        var workspace by mutableStateOf(CellWorkspace(cells=listOf(cell),profiles=listOf(ProfileLayout("seed",placements=listOf(CellPlacement("f",x=1,y=1,spanX=2,spanY=2))))))
+        var saves=0
+        compose.setContent { AtlasTheme(StyleSheet()) { LauncherScreen(spec,workspace,apps,true,{}, {}, { workspace=it;saves++ }, {}, {}) } }
+        compose.onNodeWithContentDescription("Tools").performTouchInput { longClick() }
+        compose.onNodeWithTag("cell-selection").assertExists()
+        compose.onNodeWithText("Cell 편집").assertDoesNotExist()
+        val slot=compose.onNodeWithTag("cell-selection").fetchSemanticsNode().boundsInRoot.width/2
+        compose.runOnIdle { saves=0 }
+        compose.onNodeWithTag("resize-left").performTouchInput { down(center);moveTo(center+androidx.compose.ui.geometry.Offset(-slot,0f));up() }
+        compose.runOnIdle {
+            val placement=workspace.profiles.first { it.id==workspace.activeProfileId }.placements.single()
+            assertEquals(0,placement.x);assertEquals(3,placement.spanX);assertEquals(1,saves)
+        }
+    }
+    @Test fun selectedAppCannotLaunchAndHasNoResizeHandles() {
+        var launched=false
+        var workspace by mutableStateOf(CellWorkspace(cells=listOf(Cell("a",app=apps[0].ref)),profiles=listOf(ProfileLayout("seed",placements=listOf(CellPlacement("a"))))))
+        compose.setContent { AtlasTheme(StyleSheet()) { LauncherScreen(spec,workspace,apps,true,{}, { launched=true }, { workspace=it }, {}, {}) } }
+        compose.onNodeWithContentDescription("Camera").performTouchInput { longClick() }
+        compose.onNodeWithTag("cell-selection").assertExists()
+        compose.onNodeWithTag("resize-right").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Camera").performClick()
+        compose.runOnIdle { assertFalse(launched) }
+    }
+    @Test fun invalidResizeAndPointerCancellationKeepPlacementAndDoNotSave() {
+        val folder=Cell("f","folder",label="Tools",children=listOf(apps[0].ref))
+        val original=CellPlacement("f",x=1,y=1,spanX=2,spanY=2)
+        var workspace by mutableStateOf(CellWorkspace(cells=listOf(folder,Cell("a",app=apps[1].ref)),profiles=listOf(ProfileLayout("seed",placements=listOf(original,CellPlacement("a",x=3,y=1))))))
+        var saves=0
+        compose.setContent { AtlasTheme(StyleSheet()) { LauncherScreen(spec,workspace,apps,true,{}, {}, {workspace=it;saves++}, {}, {}) } }
+        compose.onNodeWithContentDescription("Tools").performTouchInput {longClick()}
+        val slot=compose.onNodeWithTag("cell-selection").fetchSemanticsNode().boundsInRoot.width/2
+        compose.runOnIdle {saves=0}
+        compose.onNodeWithTag("resize-right").performTouchInput {down(center);moveTo(center+androidx.compose.ui.geometry.Offset(slot,0f));up()}
+        compose.runOnIdle {assertEquals(original,workspace.profiles.last().placements.first {it.cellId=="f"});assertEquals(0,saves)}
+        compose.onNodeWithTag("resize-left").performTouchInput {down(center);moveTo(center-androidx.compose.ui.geometry.Offset(slot,0f));cancel()}
+        compose.runOnIdle {assertEquals(original,workspace.profiles.last().placements.first {it.cellId=="f"});assertEquals(0,saves)}
+        compose.onNodeWithText("완료").performClick()
+        compose.onNodeWithTag("cell-selection").assertDoesNotExist()
+    }
+    @Test fun cancellingCellBodyMoveNeverCommitsDestination() {
+        var workspace by mutableStateOf(CellWorkspace(cells=listOf(Cell("a",app=apps[0].ref)),profiles=listOf(ProfileLayout("seed",placements=listOf(CellPlacement("a"))))))
+        var saves=0
+        compose.setContent { AtlasTheme(StyleSheet()) {LauncherScreen(spec,workspace,apps,true,{}, {}, {workspace=it;saves++}, {}, {})} }
+        compose.onNodeWithContentDescription("Camera").performTouchInput {longClick()}
+        val source=compose.onNodeWithContentDescription("Camera")
+        val bounds=source.fetchSemanticsNode().boundsInRoot
+        val dock=compose.onNodeWithContentDescription("Dock 1 앱 추가").fetchSemanticsNode().boundsInRoot.center
+        compose.runOnIdle {saves=0}
+        source.performTouchInput {down(center);moveTo(dock-bounds.topLeft);cancel()}
+        compose.runOnIdle {assertEquals(0,workspace.profiles.last().placements.single().pageId);assertEquals(0,saves)}
+    }
+    @Test fun outOfBoundsBodyDropDoesNotWriteWorkspace() {
+        val folder=Cell("f","folder",label="Tools",children=listOf(apps[0].ref))
+        val original=CellPlacement("f",spanX=2,spanY=2)
+        var workspace by mutableStateOf(CellWorkspace(cells=listOf(folder),profiles=listOf(ProfileLayout("seed",placements=listOf(original)))))
+        var saves=0
+        compose.setContent {AtlasTheme(StyleSheet()) {LauncherScreen(spec,workspace,apps,true,{}, {}, {workspace=it;saves++}, {}, {})}}
+        compose.onNodeWithContentDescription("Tools").performTouchInput {longClick()}
+        val source=compose.onNodeWithContentDescription("Tools")
+        val origin=source.fetchSemanticsNode().boundsInRoot.topLeft
+        val lastColumn=compose.onNodeWithContentDescription("셀 4 앱 추가").fetchSemanticsNode().boundsInRoot.center
+        compose.runOnIdle {saves=0}
+        source.performTouchInput {down(androidx.compose.ui.geometry.Offset(16f,16f));moveTo(lastColumn-origin);up()}
+        compose.runOnIdle {assertEquals(original,workspace.profiles.last().placements.single());assertEquals(0,saves)}
+    }
+
     @Test fun drawerFiltersRealCatalogAndLaunchesSelectedComponent() {
         var launched: AppRef? = null
         compose.setContent { MaterialTheme { LauncherScreen(spec, CellWorkspace(), apps, false, {}, { launched = it }, {}, {}, {}) } }
@@ -46,6 +115,7 @@ class LauncherScreenTest {
         compose.setContent { AtlasTheme(StyleSheet()) { LauncherScreen(spec,workspace,apps,true,{}, {}, { workspace=it }, {}, {}) } }
         compose.onNodeWithContentDescription("배치 편집").performClick()
         compose.onNodeWithContentDescription("Camera").performClick()
+        compose.onNodeWithText("옵션").performClick()
         compose.onNodeWithText("닫기").performClick()
         compose.runOnIdle {
             val p=workspace.profiles.last()
